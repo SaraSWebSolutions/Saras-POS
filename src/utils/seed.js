@@ -7,16 +7,20 @@ const Settings = require("../models/Settings");
 async function seed() {
   await connectDB();
 
-  const existingAdmin = await User.findOne({ email: "admin@saraspos.com" });
+  const existingAdmin = await User.findOne({ username: "admin" });
   if (!existingAdmin) {
     await User.create({
       name: "Admin",
+      username: "admin",
       email: "admin@saraspos.com",
       password: "Admin@123",
+      businessName: "Saras POS Demo Shop",
+      country: "India",
+      agreedToTerms: true,
       role: "admin",
     });
     console.log(
-      "Default admin created -> email: admin@saraspos.com | password: Admin@123",
+      "Default admin created -> username: admin | password: Admin@123",
     );
   } else {
     console.log("Admin user already exists, skipping.");

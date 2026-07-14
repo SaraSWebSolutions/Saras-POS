@@ -27,7 +27,10 @@ function dateRangeFilter(req, field = "createdAt") {
 exports.dashboardReport = asyncHandler(async (req, res) => {
   const today = { createdAt: { $gte: startOfDay(), $lte: endOfDay() } };
   const [salesAgg, orders] = await Promise.all([
-    Cart.aggregate([{ $match: { status: "completed", ...today } }, { $group: { _id: null, total: { $sum: "$grandTotal" } } }]),
+    Cart.aggregate([
+      { $match: { status: "completed", ...today } },
+      { $group: { _id: null, total: { $sum: "$grandTotal" } } },
+    ]),
     Cart.countDocuments({ status: "completed", ...today }),
   ]);
   return success(res, "Dashboard report summary", {
@@ -43,7 +46,11 @@ exports.todaySales = asyncHandler(async (req, res) => {
     createdAt: { $gte: startOfDay(), $lte: endOfDay() },
   }).populate("customer", "name mobile");
   const total = invoices.reduce((sum, i) => sum + i.grandTotal, 0);
-  return success(res, "Today's sales report", { invoices, total, count: invoices.length });
+  return success(res, "Today's sales report", {
+    invoices,
+    total,
+    count: invoices.length,
+  });
 });
 
 // GET /reports/daily
@@ -101,7 +108,11 @@ exports.productWise = asyncHandler(async (req, res) => {
 
 // GET /reports/customer-wise
 exports.customerWise = asyncHandler(async (req, res) => {
-  const filter = { status: "completed", customer: { $ne: null }, ...dateRangeFilter(req) };
+  const filter = {
+    status: "completed",
+    customer: { $ne: null },
+    ...dateRangeFilter(req),
+  };
   const rows = await Cart.aggregate([
     { $match: filter },
     {
@@ -111,9 +122,23 @@ exports.customerWise = asyncHandler(async (req, res) => {
         totalSpent: { $sum: "$grandTotal" },
       },
     },
-    { $lookup: { from: "customers", localField: "_id", foreignField: "_id", as: "customer" } },
+    {
+      $lookup: {
+        from: "customers",
+        localField: "_id",
+        foreignField: "_id",
+        as: "customer",
+      },
+    },
     { $unwind: "$customer" },
-    { $project: { name: "$customer.name", mobile: "$customer.mobile", totalOrders: 1, totalSpent: 1 } },
+    {
+      $project: {
+        name: "$customer.name",
+        mobile: "$customer.mobile",
+        totalOrders: 1,
+        totalSpent: 1,
+      },
+    },
     { $sort: { totalSpent: -1 } },
   ]);
   return success(res, "Customer-wise sales report", { report: rows });
@@ -124,7 +149,13 @@ exports.gstReport = asyncHandler(async (req, res) => {
   const filter = { status: "completed", ...dateRangeFilter(req) };
   const agg = await Cart.aggregate([
     { $match: filter },
-    { $group: { _id: null, totalGst: { $sum: "$gstAmount" }, totalSales: { $sum: "$grandTotal" } } },
+    {
+      $group: {
+        _id: null,
+        totalGst: { $sum: "$gstAmount" },
+        totalSales: { $sum: "$grandTotal" },
+      },
+    },
   ]);
   return success(res, "GST summary report", {
     totalGst: agg[0]?.totalGst || 0,
@@ -137,7 +168,13 @@ exports.paymentReport = asyncHandler(async (req, res) => {
   const filter = { status: "completed", ...dateRangeFilter(req) };
   const rows = await Cart.aggregate([
     { $match: filter },
-    { $group: { _id: "$paymentMethod", total: { $sum: "$grandTotal" }, count: { $sum: 1 } } },
+    {
+      $group: {
+        _id: "$paymentMethod",
+        total: { $sum: "$grandTotal" },
+        count: { $sum: 1 },
+      },
+    },
   ]);
   return success(res, "Payment method report", { report: rows });
 });
@@ -149,7 +186,13 @@ exports.topSelling = asyncHandler(async (req, res) => {
   const rows = await Cart.aggregate([
     { $match: filter },
     { $unwind: "$items" },
-    { $group: { _id: "$items.product", name: { $first: "$items.name" }, qtySold: { $sum: "$items.qty" } } },
+    {
+      $group: {
+        _id: "$items.product",
+        name: { $first: "$items.name" },
+        qtySold: { $sum: "$items.qty" },
+      },
+    },
     { $sort: { qtySold: -1 } },
     { $limit: limit },
   ]);
@@ -158,10 +201,9 @@ exports.topSelling = asyncHandler(async (req, res) => {
 
 // GET /reports/low-stock
 exports.lowStockReport = asyncHandler(async (req, res) => {
-  const products = await Product.find({ $expr: { $lte: ["$stockQty", "$lowStockThreshold"] } }).populate(
-    "category",
-    "name"
-  );
+  const products = await Product.find({
+    $expr: { $lte: ["$stockQty", "$lowStockThreshold"] },
+  }).populate("category", "name");
   return success(res, "Low stock report", { products });
 });
 
@@ -180,13 +222,20 @@ exports.salesSummary = asyncHandler(async (req, res) => {
       },
     },
   ]);
-  return success(res, "Sales summary", agg[0] || { totalSales: 0, totalOrders: 0, totalDiscount: 0, totalGst: 0 });
+  return success(
+    res,
+    "Sales summary",
+    agg[0] || { totalSales: 0, totalOrders: 0, totalDiscount: 0, totalGst: 0 },
+  );
 });
 
 // GET /reports/profit-loss
 exports.profitLoss = asyncHandler(async (req, res) => {
   const filter = { status: "completed", ...dateRangeFilter(req) };
-  const invoices = await Cart.find(filter).populate("items.product", "purchasePrice");
+  const invoices = await Cart.find(filter).populate(
+    "items.product",
+    "purchasePrice",
+  );
 
   let revenue = 0;
   let cost = 0;
@@ -239,7 +288,9 @@ exports.holdBills = asyncHandler(async (req, res) => {
 // GET /reports/export/pdf
 exports.exportPdf = asyncHandler(async (req, res) => {
   const filter = { status: "completed", ...dateRangeFilter(req) };
-  const invoices = await Cart.find(filter).populate("customer", "name mobile").lean();
+  const invoices = await Cart.find(filter)
+    .populate("customer", "name mobile")
+    .lean();
   const rows = invoices.map((i) => ({
     invoiceNo: i.invoiceNo,
     customer: i.customer?.name || "Walk-in",
@@ -265,7 +316,9 @@ exports.exportPdf = asyncHandler(async (req, res) => {
 // GET /reports/export/excel
 exports.exportExcel = asyncHandler(async (req, res) => {
   const filter = { status: "completed", ...dateRangeFilter(req) };
-  const invoices = await Cart.find(filter).populate("customer", "name mobile").lean();
+  const invoices = await Cart.find(filter)
+    .populate("customer", "name mobile")
+    .lean();
   const rows = invoices.map((i) => ({
     invoiceNo: i.invoiceNo,
     customer: i.customer?.name || "Walk-in",
@@ -335,7 +388,13 @@ exports.chartTopProducts = asyncHandler(async (req, res) => {
   const rows = await Cart.aggregate([
     { $match: { status: "completed" } },
     { $unwind: "$items" },
-    { $group: { _id: "$items.product", name: { $first: "$items.name" }, qtySold: { $sum: "$items.qty" } } },
+    {
+      $group: {
+        _id: "$items.product",
+        name: { $first: "$items.name" },
+        qtySold: { $sum: "$items.qty" },
+      },
+    },
     { $sort: { qtySold: -1 } },
     { $limit: limit },
   ]);

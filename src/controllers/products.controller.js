@@ -36,7 +36,10 @@ exports.list = asyncHandler(async (req, res) => {
 
 // GET /products/:id
 exports.getOne = asyncHandler(async (req, res) => {
-  const product = await Product.findById(req.params.id).populate("category", "name");
+  const product = await Product.findById(req.params.id).populate(
+    "category",
+    "name",
+  );
   if (!product) throw new ApiError(404, "Product not found.");
   return success(res, "Get Product Details", { product });
 });
@@ -55,8 +58,16 @@ exports.create = asyncHandler(async (req, res) => {
     image,
   } = req.body;
 
-  if (!product_name || !category_id || !barcode || selling_price === undefined) {
-    throw new ApiError(422, "product_name, category_id, barcode and selling_price are required.");
+  if (
+    !product_name ||
+    !category_id ||
+    !barcode ||
+    selling_price === undefined
+  ) {
+    throw new ApiError(
+      422,
+      "product_name, category_id, barcode and selling_price are required.",
+    );
   }
   const category = await Category.findById(category_id);
   if (!category) throw new ApiError(422, "Invalid category_id.");
@@ -110,10 +121,9 @@ exports.remove = asyncHandler(async (req, res) => {
 
 // GET /products/barcode/:barcode
 exports.getByBarcode = asyncHandler(async (req, res) => {
-  const product = await Product.findOne({ barcode: req.params.barcode }).populate(
-    "category",
-    "name"
-  );
+  const product = await Product.findOne({
+    barcode: req.params.barcode,
+  }).populate("category", "name");
   if (!product) throw new ApiError(404, "Product not found for this barcode.");
   return success(res, "Search Product by Barcode", { product });
 });
@@ -133,14 +143,19 @@ exports.search = asyncHandler(async (req, res) => {
 
 // GET /products/category/:id
 exports.byCategory = asyncHandler(async (req, res) => {
-  const products = await Product.find({ category: req.params.id, status: "active" });
+  const products = await Product.find({
+    category: req.params.id,
+    status: "active",
+  });
   return success(res, "Products by Category", { products });
 });
 
 // POST /products/upload-image
 exports.uploadImage = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(422, "Image file is required.");
-  return success(res, "Upload Product Image", { imageUrl: fileUrl(req, req.file.filename) });
+  return success(res, "Upload Product Image", {
+    imageUrl: fileUrl(req, req.file.filename),
+  });
 });
 
 // POST /products/stock-update
@@ -183,16 +198,35 @@ exports.bulkUpload = asyncHandler(async (req, res) => {
   const rows = [];
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return; // header row
-    const [, name, categoryName, barcode, sellingPrice, purchasePrice, stockQty, gstRate, unit] =
-      row.values;
-    rows.push({ name, categoryName, barcode, sellingPrice, purchasePrice, stockQty, gstRate, unit });
+    const [
+      ,
+      name,
+      categoryName,
+      barcode,
+      sellingPrice,
+      purchasePrice,
+      stockQty,
+      gstRate,
+      unit,
+    ] = row.values;
+    rows.push({
+      name,
+      categoryName,
+      barcode,
+      sellingPrice,
+      purchasePrice,
+      stockQty,
+      gstRate,
+      unit,
+    });
   });
 
   const results = { created: 0, failed: [] };
   for (const row of rows) {
     try {
       let category = await Category.findOne({ name: row.categoryName });
-      if (!category) category = await Category.create({ name: row.categoryName });
+      if (!category)
+        category = await Category.create({ name: row.categoryName });
 
       await Product.create({
         name: row.name,
@@ -228,9 +262,16 @@ exports.bulkDelete = asyncHandler(async (req, res) => {
 exports.setStatus = asyncHandler(async (req, res) => {
   const { product_id, status } = req.body;
   if (!product_id || !["active", "inactive"].includes(status)) {
-    throw new ApiError(422, "product_id and valid status (active/inactive) are required.");
+    throw new ApiError(
+      422,
+      "product_id and valid status (active/inactive) are required.",
+    );
   }
-  const product = await Product.findByIdAndUpdate(product_id, { status }, { new: true });
+  const product = await Product.findByIdAndUpdate(
+    product_id,
+    { status },
+    { new: true },
+  );
   if (!product) throw new ApiError(404, "Product not found.");
   return success(res, "Enable/Disable Product", { product });
 });
@@ -247,7 +288,7 @@ exports.generateBarcode = asyncHandler(async (req, res) => {
     const product = await Product.findByIdAndUpdate(
       product_id,
       { barcode: barcodeValue },
-      { new: true }
+      { new: true },
     );
     if (!product) throw new ApiError(404, "Product not found.");
   }

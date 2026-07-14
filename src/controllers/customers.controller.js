@@ -10,7 +10,12 @@ const { success } = require("../utils/response");
 exports.list = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, search = "" } = req.query;
   const filter = search
-    ? { $or: [{ name: { $regex: search, $options: "i" } }, { mobile: { $regex: search, $options: "i" } }] }
+    ? {
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { mobile: { $regex: search, $options: "i" } },
+        ],
+      }
     : {};
 
   const [customers, total] = await Promise.all([
@@ -37,7 +42,8 @@ exports.getOne = asyncHandler(async (req, res) => {
 // POST /customers
 exports.create = asyncHandler(async (req, res) => {
   const { name, mobile, email, address } = req.body;
-  if (!name || !mobile) throw new ApiError(422, "name and mobile are required.");
+  if (!name || !mobile)
+    throw new ApiError(422, "name and mobile are required.");
   const customer = await Customer.create({ name, mobile, email, address });
   return success(res, "Add new customer", { customer }, 201);
 });
@@ -66,14 +72,20 @@ exports.search = asyncHandler(async (req, res) => {
   const { keyword = "" } = req.query;
   const customers = await Customer.find({
     status: "active",
-    $or: [{ name: { $regex: keyword, $options: "i" } }, { mobile: { $regex: keyword, $options: "i" } }],
+    $or: [
+      { name: { $regex: keyword, $options: "i" } },
+      { mobile: { $regex: keyword, $options: "i" } },
+    ],
   }).limit(50);
   return success(res, "Search customer by name/mobile", { customers });
 });
 
 // GET /customers/:id/history
 exports.purchaseHistory = asyncHandler(async (req, res) => {
-  const history = await Cart.find({ customer: req.params.id, status: "completed" })
+  const history = await Cart.find({
+    customer: req.params.id,
+    status: "completed",
+  })
     .sort({ createdAt: -1 })
     .select("invoiceNo grandTotal paymentMethod createdAt");
   return success(res, "Customer purchase history", { history });
@@ -82,8 +94,19 @@ exports.purchaseHistory = asyncHandler(async (req, res) => {
 // GET /customers/:id/total-purchase
 exports.totalPurchase = asyncHandler(async (req, res) => {
   const agg = await Cart.aggregate([
-    { $match: { customer: new mongoose.Types.ObjectId(req.params.id), status: "completed" } },
-    { $group: { _id: null, total: { $sum: "$grandTotal" }, orders: { $sum: 1 } } },
+    {
+      $match: {
+        customer: new mongoose.Types.ObjectId(req.params.id),
+        status: "completed",
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: "$grandTotal" },
+        orders: { $sum: 1 },
+      },
+    },
   ]);
   return success(res, "Total purchase amount", {
     totalPurchase: agg[0]?.total || 0,
@@ -93,7 +116,10 @@ exports.totalPurchase = asyncHandler(async (req, res) => {
 
 // GET /customers/:id/invoices
 exports.invoices = asyncHandler(async (req, res) => {
-  const invoices = await Cart.find({ customer: req.params.id, status: "completed" }).sort({
+  const invoices = await Cart.find({
+    customer: req.params.id,
+    status: "completed",
+  }).sort({
     createdAt: -1,
   });
   return success(res, "Customer invoices", { invoices });
@@ -102,7 +128,15 @@ exports.invoices = asyncHandler(async (req, res) => {
 // GET /customers/export
 exports.exportList = asyncHandler(async (req, res) => {
   const customers = await Customer.find().lean();
-  const fields = ["name", "mobile", "email", "address", "totalPurchase", "status", "createdAt"];
+  const fields = [
+    "name",
+    "mobile",
+    "email",
+    "address",
+    "totalPurchase",
+    "status",
+    "createdAt",
+  ];
   const parser = new Parser({ fields });
   const csv = parser.parse(customers);
 
@@ -114,14 +148,21 @@ exports.exportList = asyncHandler(async (req, res) => {
 // PATCH /customers/:id/status
 exports.setStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
-  if (!["active", "inactive"].includes(status)) throw new ApiError(422, "Invalid status.");
-  const customer = await Customer.findByIdAndUpdate(req.params.id, { status }, { new: true });
+  if (!["active", "inactive"].includes(status))
+    throw new ApiError(422, "Invalid status.");
+  const customer = await Customer.findByIdAndUpdate(
+    req.params.id,
+    { status },
+    { new: true },
+  );
   if (!customer) throw new ApiError(404, "Customer not found.");
   return success(res, "Enable/Disable customer", { customer });
 });
 
 // GET /customers/dropdown
 exports.dropdown = asyncHandler(async (req, res) => {
-  const customers = await Customer.find({ status: "active" }).select("name mobile").sort({ name: 1 });
+  const customers = await Customer.find({ status: "active" })
+    .select("name mobile")
+    .sort({ name: 1 });
   return success(res, "Customer dropdown for billing", { customers });
 });

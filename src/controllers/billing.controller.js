@@ -10,6 +10,7 @@ const ApiError = require("../utils/ApiError");
 const asyncHandler = require("../utils/asyncHandler");
 const { success } = require("../utils/response");
 const { nextInvoiceNumber, nextStockRefNumber } = require("../utils/sequence");
+const { notifyLowStock, notifyNewOrder } = require("../utils/notify");
 const { uploadDir } = require("../middleware/upload");
 const { fileUrl } = require("../utils/exporter");
 
@@ -57,7 +58,10 @@ async function findActiveCart(cartId) {
   const cart = await Cart.findById(cartId).populate("customer", "name mobile");
   if (!cart) throw new ApiError(404, "Cart not found.");
   if (!["active", "hold"].includes(cart.status)) {
-    throw new ApiError(422, "This cart is not editable (already completed/cancelled).");
+    throw new ApiError(
+      422,
+      "This cart is not editable (already completed/cancelled).",
+    );
   }
   return cart;
 }
@@ -66,7 +70,10 @@ async function findActiveCart(cartId) {
 
 // GET /billing/products
 exports.billingProducts = asyncHandler(async (req, res) => {
-  const products = await Product.find({ status: "active" }).populate("category", "name");
+  const products = await Product.find({ status: "active" }).populate(
+    "category",
+    "name",
+  );
   return success(res, "Get all products for billing", { products });
 });
 
@@ -82,7 +89,10 @@ exports.billingSearchProducts = asyncHandler(async (req, res) => {
 
 // GET /billing/products/barcode/:barcode
 exports.billingProductByBarcode = asyncHandler(async (req, res) => {
-  const product = await Product.findOne({ barcode: req.params.barcode, status: "active" });
+  const product = await Product.findOne({
+    barcode: req.params.barcode,
+    status: "active",
+  });
   if (!product) throw new ApiError(404, "Product not found for this barcode.");
   return success(res, "Get product by barcode", { product });
 });
@@ -97,7 +107,10 @@ exports.createCart = asyncHandler(async (req, res) => {
 
 // GET /billing/cart/:cartId
 exports.getCart = asyncHandler(async (req, res) => {
-  const cart = await Cart.findById(req.params.cartId).populate("customer", "name mobile");
+  const cart = await Cart.findById(req.params.cartId).populate(
+    "customer",
+    "name mobile",
+  );
   if (!cart) throw new ApiError(404, "Cart not found.");
   return success(res, "Get current cart details", { cart });
 });
@@ -124,7 +137,9 @@ exports.addItem = asyncHandler(async (req, res) => {
     throw new ApiError(422, "Insufficient stock for this product.");
   }
 
-  const existing = cart.items.find((i) => i.product.toString() === product._id.toString());
+  const existing = cart.items.find(
+    (i) => i.product.toString() === product._id.toString(),
+  );
   if (existing) {
     existing.qty += Number(qty);
   } else {
@@ -165,7 +180,8 @@ exports.updateItem = asyncHandler(async (req, res) => {
 // DELETE /billing/cart/remove-item
 exports.removeItem = asyncHandler(async (req, res) => {
   const { cartId, product_id } = req.body;
-  if (!cartId || !product_id) throw new ApiError(422, "cartId and product_id are required.");
+  if (!cartId || !product_id)
+    throw new ApiError(422, "cartId and product_id are required.");
 
   const cart = await findActiveCart(cartId);
   cart.items = cart.items.filter((i) => i.product.toString() !== product_id);
@@ -191,13 +207,20 @@ exports.clearCart = asyncHandler(async (req, res) => {
 // POST /billing/cart/apply-discount
 exports.applyDiscount = asyncHandler(async (req, res) => {
   const { cartId, discountType, discountValue } = req.body;
-  if (!cartId || !["flat", "percentage"].includes(discountType) || discountValue === undefined) {
-    throw new ApiError(422, "cartId, discountType(flat/percentage) and discountValue are required.");
+  if (
+    !cartId ||
+    !["flat", "percentage"].includes(discountType) ||
+    discountValue === undefined
+  ) {
+    throw new ApiError(
+      422,
+      "cartId, discountType(flat/percentage) and discountValue are required.",
+    );
   }
 
   const cart = await findActiveCart(cartId);
   cart.discountType = discountType;
-  cart.discountValue = Number(discountValue);
+  cart.discountValue = Number(dis.countValue);
 
   await recalculateCart(cart);
   return success(res, "Apply bill discount", { cart });
@@ -248,7 +271,10 @@ exports.cartSummary = asyncHandler(async (req, res) => {
 exports.searchCustomer = asyncHandler(async (req, res) => {
   const { keyword = "" } = req.query;
   const customers = await Customer.find({
-    $or: [{ name: { $regex: keyword, $options: "i" } }, { mobile: { $regex: keyword, $options: "i" } }],
+    $or: [
+      { name: { $regex: keyword, $options: "i" } },
+      { mobile: { $regex: keyword, $options: "i" } },
+    ],
   }).limit(20);
   return success(res, "Search customer", { customers });
 });
@@ -256,10 +282,12 @@ exports.searchCustomer = asyncHandler(async (req, res) => {
 // POST /billing/customer/add
 exports.addCustomerDuringBilling = asyncHandler(async (req, res) => {
   const { cartId, name, mobile, email, address } = req.body;
-  if (!name || !mobile) throw new ApiError(422, "name and mobile are required.");
+  if (!name || !mobile)
+    throw new ApiError(422, "name and mobile are required.");
 
   let customer = await Customer.findOne({ mobile });
-  if (!customer) customer = await Customer.create({ name, mobile, email, address });
+  if (!customer)
+    customer = await Customer.create({ name, mobile, email, address });
 
   if (cartId) {
     const cart = await findActiveCart(cartId);
@@ -278,7 +306,8 @@ exports.holdBill = asyncHandler(async (req, res) => {
   if (!cartId) throw new ApiError(422, "cartId is required.");
 
   const cart = await Cart.findById(cartId);
-  if (!cart || cart.status !== "active") throw new ApiError(422, "Only an active cart can be held.");
+  if (!cart || cart.status !== "active")
+    throw new ApiError(422, "Only an active cart can be held.");
 
   cart.status = "hold";
   cart.holdName = holdName || "";
@@ -297,10 +326,10 @@ exports.holdList = asyncHandler(async (req, res) => {
 
 // GET /billing/hold/:id
 exports.holdDetails = asyncHandler(async (req, res) => {
-  const cart = await Cart.findOne({ _id: req.params.id, status: "hold" }).populate(
-    "customer",
-    "name mobile"
-  );
+  const cart = await Cart.findOne({
+    _id: req.params.id,
+    status: "hold",
+  }).populate("customer", "name mobile");
   if (!cart) throw new ApiError(404, "Held bill not found.");
   return success(res, "Get held bill details", { cart });
 });
@@ -318,7 +347,10 @@ exports.resumeHold = asyncHandler(async (req, res) => {
 
 // DELETE /billing/hold/delete/:id
 exports.deleteHold = asyncHandler(async (req, res) => {
-  const cart = await Cart.findOneAndDelete({ _id: req.params.id, status: "hold" });
+  const cart = await Cart.findOneAndDelete({
+    _id: req.params.id,
+    status: "hold",
+  });
   if (!cart) throw new ApiError(404, "Held bill not found.");
   return success(res, "Delete held bill");
 });
@@ -328,7 +360,8 @@ exports.cancelBill = asyncHandler(async (req, res) => {
   const { reason } = req.body;
   const cart = await Cart.findById(req.params.id);
   if (!cart) throw new ApiError(404, "Bill not found.");
-  if (cart.status === "cancelled") throw new ApiError(422, "Bill is already cancelled.");
+  if (cart.status === "cancelled")
+    throw new ApiError(422, "Bill is already cancelled.");
 
   // If it was already completed, restore stock for each item.
   if (cart.status === "completed") {
@@ -369,7 +402,11 @@ exports.paymentCash = asyncHandler(async (req, res) => {
   const cart = await findActiveCart(cartId);
 
   cart.paymentMethod = "cash";
-  cart.paymentDetails = { cashAmount: amountReceived ?? cart.grandTotal, upiAmount: 0, upiRefNo: "" };
+  cart.paymentDetails = {
+    cashAmount: amountReceived ?? cart.grandTotal,
+    upiAmount: 0,
+    upiRefNo: "",
+  };
   cart.paymentStatus = "paid";
   await cart.save();
 
@@ -385,7 +422,11 @@ exports.paymentUpi = asyncHandler(async (req, res) => {
   const cart = await findActiveCart(cartId);
 
   cart.paymentMethod = "upi";
-  cart.paymentDetails = { cashAmount: 0, upiAmount: cart.grandTotal, upiRefNo: upiRefNo || "" };
+  cart.paymentDetails = {
+    cashAmount: 0,
+    upiAmount: cart.grandTotal,
+    upiRefNo: upiRefNo || "",
+  };
   cart.paymentStatus = "paid";
   await cart.save();
 
@@ -399,7 +440,10 @@ exports.paymentSplit = asyncHandler(async (req, res) => {
 
   const total = round2(Number(cashAmount || 0) + Number(upiAmount || 0));
   if (total !== cart.grandTotal) {
-    throw new ApiError(422, `Split amounts (${total}) must equal the grand total (${cart.grandTotal}).`);
+    throw new ApiError(
+      422,
+      `Split amounts (${total}) must equal the grand total (${cart.grandTotal}).`,
+    );
   }
 
   cart.paymentMethod = "split";
@@ -434,9 +478,15 @@ exports.generateInvoice = asyncHandler(async (req, res) => {
 
   const cart = await Cart.findById(cartId);
   if (!cart) throw new ApiError(404, "Cart not found.");
-  if (cart.status !== "active") throw new ApiError(422, "Only an active cart can be invoiced.");
-  if (cart.items.length === 0) throw new ApiError(422, "Cannot generate invoice for an empty cart.");
-  if (cart.paymentStatus !== "paid") throw new ApiError(422, "Payment must be completed before generating the invoice.");
+  if (cart.status !== "active")
+    throw new ApiError(422, "Only an active cart can be invoiced.");
+  if (cart.items.length === 0)
+    throw new ApiError(422, "Cannot generate invoice for an empty cart.");
+  if (cart.paymentStatus !== "paid")
+    throw new ApiError(
+      422,
+      "Payment must be completed before generating the invoice.",
+    );
 
   // Reduce stock and log stock history for each item
   for (const item of cart.items) {
@@ -457,6 +507,8 @@ exports.generateInvoice = asyncHandler(async (req, res) => {
       reference: cart.invoiceNo || "PENDING",
       createdBy: req.user._id,
     });
+
+    await notifyLowStock(product);
   }
 
   cart.invoiceNo = await nextInvoiceNumber();
@@ -464,32 +516,39 @@ exports.generateInvoice = asyncHandler(async (req, res) => {
   await cart.save();
 
   // Backfill stock history reference now that invoice number exists
-  await StockHistory.updateMany({ reference: "PENDING" }, { reference: cart.invoiceNo });
+  await StockHistory.updateMany(
+    { reference: "PENDING" },
+    { reference: cart.invoiceNo },
+  );
 
   if (cart.customer) {
-    await Customer.findByIdAndUpdate(cart.customer, { $inc: { totalPurchase: cart.grandTotal } });
+    await Customer.findByIdAndUpdate(cart.customer, {
+      $inc: { totalPurchase: cart.grandTotal },
+    });
   }
 
-  const populated = await Cart.findById(cart._id).populate("customer", "name mobile");
+  const populated = await Cart.findById(cart._id).populate(
+    "customer",
+    "name mobile",
+  );
+  await notifyNewOrder(populated);
   return success(res, "Generate invoice", { invoice: populated }, 201);
 });
 
 // GET /billing/invoice/:invoiceNo
 exports.getInvoice = asyncHandler(async (req, res) => {
-  const invoice = await Cart.findOne({ invoiceNo: req.params.invoiceNo }).populate(
-    "customer",
-    "name mobile email address"
-  );
+  const invoice = await Cart.findOne({
+    invoiceNo: req.params.invoiceNo,
+  }).populate("customer", "name mobile email address");
   if (!invoice) throw new ApiError(404, "Invoice not found.");
   return success(res, "Get invoice details", { invoice });
 });
 
 // GET /billing/print/:invoiceNo
 exports.printReceipt = asyncHandler(async (req, res) => {
-  const invoice = await Cart.findOne({ invoiceNo: req.params.invoiceNo }).populate(
-    "customer",
-    "name mobile"
-  );
+  const invoice = await Cart.findOne({
+    invoiceNo: req.params.invoiceNo,
+  }).populate("customer", "name mobile");
   if (!invoice) throw new ApiError(404, "Invoice not found.");
 
   const settings = await Settings.findOne();
@@ -524,7 +583,10 @@ async function buildInvoicePdf(req, invoice, shop) {
     doc.moveDown();
     doc.fontSize(11).text(`Invoice: ${invoice.invoiceNo}`);
     doc.text(`Date: ${new Date(invoice.createdAt).toLocaleString()}`);
-    if (invoice.customer) doc.text(`Customer: ${invoice.customer.name} (${invoice.customer.mobile})`);
+    if (invoice.customer)
+      doc.text(
+        `Customer: ${invoice.customer.name} (${invoice.customer.mobile})`,
+      );
     doc.moveDown();
 
     invoice.items.forEach((item) => {
@@ -537,7 +599,9 @@ async function buildInvoicePdf(req, invoice, shop) {
     doc.text(`Subtotal: ${invoice.subtotal}`);
     doc.text(`Discount: ${invoice.discountAmount}`);
     doc.text(`GST: ${invoice.gstAmount}`);
-    doc.fontSize(12).text(`Grand Total: ${invoice.grandTotal}`, { underline: true });
+    doc
+      .fontSize(12)
+      .text(`Grand Total: ${invoice.grandTotal}`, { underline: true });
 
     doc.end();
     stream.on("finish", resolve);
@@ -549,10 +613,9 @@ async function buildInvoicePdf(req, invoice, shop) {
 
 // GET /billing/share/whatsapp/:invoiceNo
 exports.shareWhatsapp = asyncHandler(async (req, res) => {
-  const invoice = await Cart.findOne({ invoiceNo: req.params.invoiceNo }).populate(
-    "customer",
-    "name mobile"
-  );
+  const invoice = await Cart.findOne({
+    invoiceNo: req.params.invoiceNo,
+  }).populate("customer", "name mobile");
   if (!invoice) throw new ApiError(404, "Invoice not found.");
 
   const settings = await Settings.findOne();
@@ -589,7 +652,9 @@ exports.history = asyncHandler(async (req, res) => {
 
 // DELETE /billing/delete/:invoiceNo
 exports.deleteInvoice = asyncHandler(async (req, res) => {
-  const invoice = await Cart.findOneAndDelete({ invoiceNo: req.params.invoiceNo });
+  const invoice = await Cart.findOneAndDelete({
+    invoiceNo: req.params.invoiceNo,
+  });
   if (!invoice) throw new ApiError(404, "Invoice not found.");
   return success(res, "Delete invoice (Admin only)");
 });
@@ -601,7 +666,8 @@ exports.refund = asyncHandler(async (req, res) => {
 
   const invoice = await Cart.findOne({ invoiceNo });
   if (!invoice) throw new ApiError(404, "Invoice not found.");
-  if (invoice.paymentStatus === "refunded") throw new ApiError(422, "Invoice already refunded.");
+  if (invoice.paymentStatus === "refunded")
+    throw new ApiError(422, "Invoice already refunded.");
 
   if (restoreStock) {
     for (const item of invoice.items) {

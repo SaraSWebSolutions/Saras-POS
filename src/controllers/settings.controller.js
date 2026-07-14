@@ -20,7 +20,9 @@ async function getSettings() {
 // GET /settings/shop-profile
 exports.getShopProfile = asyncHandler(async (req, res) => {
   const settings = await getSettings();
-  return success(res, "Get shop profile", { shopProfile: settings.shopProfile });
+  return success(res, "Get shop profile", {
+    shopProfile: settings.shopProfile,
+  });
 });
 
 // PUT /settings/shop-profile
@@ -28,7 +30,9 @@ exports.updateShopProfile = asyncHandler(async (req, res) => {
   const settings = await getSettings();
   settings.shopProfile = { ...settings.shopProfile.toObject(), ...req.body };
   await settings.save();
-  return success(res, "Update shop profile", { shopProfile: settings.shopProfile });
+  return success(res, "Update shop profile", {
+    shopProfile: settings.shopProfile,
+  });
 });
 
 // GET /settings/tax
@@ -62,7 +66,9 @@ exports.updateBilling = asyncHandler(async (req, res) => {
 // GET /settings/printer
 exports.getPrinter = asyncHandler(async (req, res) => {
   const settings = await getSettings();
-  return success(res, "Get printer configuration", { printer: settings.printer });
+  return success(res, "Get printer configuration", {
+    printer: settings.printer,
+  });
 });
 
 // PUT /settings/printer
@@ -70,12 +76,16 @@ exports.updatePrinter = asyncHandler(async (req, res) => {
   const settings = await getSettings();
   settings.printer = { ...settings.printer.toObject(), ...req.body };
   await settings.save();
-  return success(res, "Save printer configuration", { printer: settings.printer });
+  return success(res, "Save printer configuration", {
+    printer: settings.printer,
+  });
 });
 
 // GET /settings/users
 exports.listUsers = asyncHandler(async (req, res) => {
-  const users = await User.find().select("-password -otp -otpExpiry -resetToken -resetTokenExpiry");
+  const users = await User.find().select(
+    "-password -otp -otpExpiry -resetToken -resetTokenExpiry",
+  );
   return success(res, "User management list", { users });
 });
 
@@ -89,9 +99,19 @@ exports.backup = asyncHandler(async (req, res) => {
     Customer.find().lean(),
   ]);
 
-  const payload = { settings, users, products, categories, customers, generatedAt: new Date() };
+  const payload = {
+    settings,
+    users,
+    products,
+    categories,
+    customers,
+    generatedAt: new Date(),
+  };
   const filename = `backup-${Date.now()}.json`;
-  fs.writeFileSync(path.join(uploadDir, filename), JSON.stringify(payload, null, 2));
+  fs.writeFileSync(
+    path.join(uploadDir, filename),
+    JSON.stringify(payload, null, 2),
+  );
 
   return success(res, "Create backup", { backupUrl: fileUrl(req, filename) });
 });
@@ -132,5 +152,7 @@ exports.restore = asyncHandler(async (req, res) => {
 // GET /settings/about
 exports.about = asyncHandler(async (req, res) => {
   const settings = await getSettings();
-  return success(res, "App version & company details", { about: settings.about });
+  return success(res, "App version & company details", {
+    about: settings.about,
+  });
 });

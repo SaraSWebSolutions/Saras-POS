@@ -108,7 +108,7 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
   const otp = generateOTP();
   user.otp = otp;
   user.otpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
-  await user.save();
+  await user.save({validateBeforeSave: false});
 
   await sendOTPEmail(user.email, otp);
 
@@ -132,7 +132,7 @@ exports.verifyOtp = asyncHandler(async (req, res) => {
   user.resetTokenExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
   user.otp = undefined;
   user.otpExpiry = undefined;
-  await user.save();
+  await user.save({ validateBeforeSave: false });
 
   return success(res, "OTP verified.", { resetToken });
 });
@@ -161,7 +161,7 @@ exports.resetPassword = asyncHandler(async (req, res) => {
   user.password = newPassword;
   user.resetToken = undefined;
   user.resetTokenExpiry = undefined;
-  await user.save();
+  await user.save({ validateBeforeSave: false});
 
   return success(res, "Password reset successful. Please login.");
 });
@@ -178,7 +178,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
   if (name) user.name = name;
   if (phone) user.phone = phone;
   if (avatar) user.avatar = avatar;
-  await user.save();
+  await user.save({ validateBeforeSave: false });
   return success(res, "Profile updated", { user: user.toSafeObject() });
 });
 
@@ -194,7 +194,7 @@ exports.changePassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Old password is incorrect.");
   }
   user.password = newPassword;
-  await user.save();
+  await user.save( { validateBeforeSave: false });
   return success(res, "Password changed successfully.");
 });
 

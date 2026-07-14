@@ -20,16 +20,19 @@ function endOfDay(date = new Date()) {
 exports.summary = asyncHandler(async (req, res) => {
   const today = { $gte: startOfDay(), $lte: endOfDay() };
 
-  const [todaySalesAgg, todayOrders, totalProducts, totalCustomers, lowStock] = await Promise.all([
-    Cart.aggregate([
-      { $match: { status: "completed", createdAt: today } },
-      { $group: { _id: null, total: { $sum: "$grandTotal" } } },
-    ]),
-    Cart.countDocuments({ status: "completed", createdAt: today }),
-    Product.countDocuments({ status: "active" }),
-    Customer.countDocuments({ createdAt: today }),
-    Product.countDocuments({ $expr: { $lte: ["$stockQty", "$lowStockThreshold"] } }),
-  ]);
+  const [todaySalesAgg, todayOrders, totalProducts, totalCustomers, lowStock] =
+    await Promise.all([
+      Cart.aggregate([
+        { $match: { status: "completed", createdAt: today } },
+        { $group: { _id: null, total: { $sum: "$grandTotal" } } },
+      ]),
+      Cart.countDocuments({ status: "completed", createdAt: today }),
+      Product.countDocuments({ status: "active" }),
+      Customer.countDocuments({ createdAt: today }),
+      Product.countDocuments({
+        $expr: { $lte: ["$stockQty", "$lowStockThreshold"] },
+      }),
+    ]);
 
   return success(res, "Dashboard Summary Cards", {
     today_sales: todaySalesAgg[0]?.total || 0,
@@ -69,7 +72,9 @@ exports.recentOrders = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate("customer", "name mobile")
-    .select("invoiceNo grandTotal paymentMethod paymentStatus customer createdAt");
+    .select(
+      "invoiceNo grandTotal paymentMethod paymentStatus customer createdAt",
+    );
 
   return success(res, "Recent Orders", { orders });
 });

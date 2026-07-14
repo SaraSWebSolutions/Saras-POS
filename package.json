@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node src/utils/seed.js"
+    "seed": "node src/utils/seed.js",
+    "migrate:users": "node src/utils/migrate-users.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

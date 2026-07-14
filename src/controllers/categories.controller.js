@@ -56,7 +56,10 @@ exports.update = asyncHandler(async (req, res) => {
 exports.remove = asyncHandler(async (req, res) => {
   const inUse = await Product.exists({ category: req.params.id });
   if (inUse) {
-    throw new ApiError(422, "Cannot delete category. Products exist under this category.");
+    throw new ApiError(
+      422,
+      "Cannot delete category. Products exist under this category.",
+    );
   }
   const category = await Category.findByIdAndDelete(req.params.id);
   if (!category) throw new ApiError(404, "Category not found.");
@@ -65,13 +68,17 @@ exports.remove = asyncHandler(async (req, res) => {
 
 // GET /categories/dropdown
 exports.dropdown = asyncHandler(async (req, res) => {
-  const categories = await Category.find({ status: "active" }).select("name").sort({ name: 1 });
+  const categories = await Category.find({ status: "active" })
+    .select("name")
+    .sort({ name: 1 });
   return success(res, "Category Dropdown List", { categories });
 });
 
 // GET /categories/:id/products
 exports.products = asyncHandler(async (req, res) => {
-  const products = await Product.find({ category: req.params.id }).sort({ name: 1 });
+  const products = await Product.find({ category: req.params.id }).sort({
+    name: 1,
+  });
   return success(res, "Products Under Category", { products });
 });
 

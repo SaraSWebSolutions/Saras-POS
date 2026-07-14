@@ -12,12 +12,19 @@ function fileUrl(req, filename) {
  * Generates a simple tabular PDF report and saves it to /uploads.
  * columns: [{ key, label, width }]
  */
-async function generatePdfReport(req, { title, columns, rows, filenamePrefix = "report" }) {
+async function generatePdfReport(
+  req,
+  { title, columns, rows, filenamePrefix = "report" },
+) {
   const filename = `${filenamePrefix}-${Date.now()}.pdf`;
   const filePath = path.join(uploadDir, filename);
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 30, size: "A4", layout: "landscape" });
+    const doc = new PDFDocument({
+      margin: 30,
+      size: "A4",
+      layout: "landscape",
+    });
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
@@ -43,7 +50,10 @@ async function generatePdfReport(req, { title, columns, rows, filenamePrefix = "
         y = doc.y;
       }
       columns.forEach((col) => {
-        const value = row[col.key] !== undefined && row[col.key] !== null ? String(row[col.key]) : "";
+        const value =
+          row[col.key] !== undefined && row[col.key] !== null
+            ? String(row[col.key])
+            : "";
         doc.text(value, x, y, { width: col.width });
         x += col.width;
       });
@@ -51,7 +61,9 @@ async function generatePdfReport(req, { title, columns, rows, filenamePrefix = "
     });
 
     doc.end();
-    stream.on("finish", () => resolve({ filename, url: fileUrl(req, filename) }));
+    stream.on("finish", () =>
+      resolve({ filename, url: fileUrl(req, filename) }),
+    );
     stream.on("error", reject);
   });
 }
@@ -60,13 +72,20 @@ async function generatePdfReport(req, { title, columns, rows, filenamePrefix = "
  * Generates an Excel report and saves it to /uploads.
  * columns: [{ key, header, width }]
  */
-async function generateExcelReport(req, { title, columns, rows, filenamePrefix = "report" }) {
+async function generateExcelReport(
+  req,
+  { title, columns, rows, filenamePrefix = "report" },
+) {
   const filename = `${filenamePrefix}-${Date.now()}.xlsx`;
   const filePath = path.join(uploadDir, filename);
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet(title.substring(0, 30));
-  sheet.columns = columns.map((c) => ({ header: c.header, key: c.key, width: c.width || 20 }));
+  sheet.columns = columns.map((c) => ({
+    header: c.header,
+    key: c.key,
+    width: c.width || 20,
+  }));
   sheet.getRow(1).font = { bold: true };
   rows.forEach((row) => sheet.addRow(row));
 

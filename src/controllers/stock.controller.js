@@ -4,6 +4,7 @@ const ApiError = require("../utils/ApiError");
 const asyncHandler = require("../utils/asyncHandler");
 const { success } = require("../utils/response");
 const { nextStockRefNumber } = require("../utils/sequence");
+const { notifyLowStock } = require("../utils/notify");
 const { generatePdfReport, generateExcelReport } = require("../utils/exporter");
 
 // GET /stock/current
@@ -79,6 +80,8 @@ exports.stockOut = asyncHandler(async (req, res) => {
     createdBy: req.user._id,
   });
 
+  await notifyLowStock(product);
+
   return success(res, "Stock Out", { history, product }, 201);
 });
 
@@ -139,6 +142,8 @@ exports.adjustment = asyncHandler(async (req, res) => {
     reason: reason || "Manual stock adjustment",
     createdBy: req.user._id,
   });
+
+  await notifyLowStock(product);
 
   return success(res, "Manual stock adjustment", { history, product });
 });
