@@ -6,17 +6,89 @@ const { success } = require("../utils/response");
 const { signToken } = require("../utils/jwt");
 const { generateOTP, sendOTPEmail } = require("../utils/email");
 
-// POST /auth/login
-exports.login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password)
-    throw new ApiError(422, "Email and password are required.");
+// POST /auth/register
+exports.register = asyncHandler(async (req, res) => {
+  const {
+    username,
+    password,
+    businessName,
+    country,
+    agreedToTerms,
+    email,
+    name,
+  } = req.body;
 
-  const user = await User.findOne({ email: email.toLowerCase() }).select(
-    "+password",
+  const missing = [];
+  if (!username) missing.push("username");
+  if (!password) missing.push("password");
+  if (!businessName) missing.push("businessName");
+  if (!country) missing.push("country");
+  if (agreedToTerms === undefined || agreedToTerms === null)
+    missing.push("agreedToTerms");
+
+  if (missing.length) {
+    throw new ApiError(422, "Missing required fields.", {
+      ...Object.fromEntries(missing.map((f) => [f, `${f} is required.`])),
+    });
+  }
+
+  if (agreedToTerms !== true) {
+    throw new ApiError(422, "Validation Error", {
+      agreedToTerms: "You must accept the Terms & Conditions to register.",
+    });
+  }
+
+  const existingUsername = await User.findOne({
+    username: username.toLowerCase(),
+  });
+  if (existingUsername) {
+    throw new ApiError(422, "Validation Error", {
+      username: "This username is already taken.",
+    });
+  }
+
+  if (email) {
+    const existingEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingEmail) {
+      throw new ApiError(422, "Validation Error", {
+        email: "This email is already registered.",
+      });
+    }
+  }
+
+  const user = await User.create({
+    username: username.toLowerCase(),
+    password,
+    businessName,
+    country,
+    agreedToTerms,
+    email: email ? email.toLowerCase() : undefined,
+    name: name || businessName,
+    role: "admin", // the person registering owns the business account
+  });
+
+  const token = signToken({ id: user._id, role: user.role });
+  return success(
+    res,
+    "Registration successful",
+    { token, user: user.toSafeObject() },
+    201,
   );
+});
+
+// POST /auth/login
+exports.login = asyncHandler(async (req, res) => {  
+  const { email, username, password } = req.body;
+  if ((!email && !username) || !password) {
+    throw new ApiError(422, "username (or email) and password are required.");
+  }
+
+  const query = email
+    ? { email: email.toLowerCase() }
+    : { username: username.toLowerCase() };
+  const user = await User.findOne(query).select("+password");
   if (!user || !(await user.comparePassword(password))) {
-    throw new ApiError(401, "Invalid email or password.");
+    throw new ApiError(401, "Invalid username/email or password.");
   }
   if (user.status !== "active")
     throw new ApiError(403, "Your account has been disabled.");

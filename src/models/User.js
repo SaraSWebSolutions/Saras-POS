@@ -5,7 +5,14 @@ const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
+      trim: true,
+      default: "",
+    },
+    username: {
+      type: String,
       required: true,
+      unique: true,
+      lowercase: true,
       trim: true,
     },
     email: {
@@ -37,6 +44,23 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["active", "inactive"],
       default: "active",
+    },
+
+    // Registration / business details
+    businessName: { 
+      type: String, 
+      required: true, 
+      trim: true 
+    },
+    country: { 
+      type: String, 
+      required: true, 
+      trim: true 
+    },
+    agreedToTerms: { 
+      type: Boolean, 
+      required: true, 
+      default: false 
     },
 
     // Forgot password flow
