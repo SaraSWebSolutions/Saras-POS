@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const {
+  all,
   summary,
   salesChart,
   recentOrders,
@@ -13,6 +14,7 @@ const { protect } = require("../middleware/auth");
 
 router.use(protect);
 
+router.get("/", all);
 router.get("/summary", summary);
 router.get("/sales-chart", salesChart);
 router.get("/recent-orders", recentOrders);

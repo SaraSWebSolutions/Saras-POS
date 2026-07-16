@@ -20,6 +20,7 @@ exports.register = asyncHandler(async (req, res) => {
 
   const missing = [];
   if (!username) missing.push("username");
+  if (!email) missing.push("email");
   if (!password) missing.push("password");
   if (!businessName) missing.push("businessName");
   if (!country) missing.push("country");
@@ -47,22 +48,20 @@ exports.register = asyncHandler(async (req, res) => {
     });
   }
 
-  if (email) {
-    const existingEmail = await User.findOne({ email: email.toLowerCase() });
-    if (existingEmail) {
-      throw new ApiError(422, "Validation Error", {
-        email: "This email is already registered.",
-      });
-    }
+  const existingEmail = await User.findOne({ email: email.toLowerCase() });
+  if (existingEmail) {
+    throw new ApiError(422, "Validation Error", {
+      email: "This email is already registered.",
+    });
   }
 
   const user = await User.create({
     username: username.toLowerCase(),
+    email: email.toLowerCase(),
     password,
     businessName,
     country,
     agreedToTerms,
-    email: email ? email.toLowerCase() : undefined,
     name: name || businessName,
     role: "admin", // the person registering owns the business account
   });
@@ -77,21 +76,44 @@ exports.register = asyncHandler(async (req, res) => {
 });
 
 // POST /auth/login
-exports.login = asyncHandler(async (req, res) => {  
+exports.login = asyncHandler(async (req, res) => {
   const { email, username, password } = req.body;
-  if ((!email && !username) || !password) {
-    throw new ApiError(422, "username (or email) and password are required.");
+
+  const errors = {};
+  if (!email && !username) {
+    errors.username = "Username or email is required.";
+    errors.email = "Username or email is required.";
+  }
+  if (!password) {
+    errors.password = "Password is required.";
+  }
+  if (Object.keys(errors).length) {
+    throw new ApiError(422, "Validation Error", errors);
   }
 
+  const field = email ? "email" : "username";
   const query = email
     ? { email: email.toLowerCase() }
     : { username: username.toLowerCase() };
+
   const user = await User.findOne(query).select("+password");
-  if (!user || !(await user.comparePassword(password))) {
-    throw new ApiError(401, "Invalid username/email or password.");
+  if (!user) {
+    throw new ApiError(401, "Invalid login credentials.", {
+      [field]: `No account found with this ${field}.`,
+    });
   }
-  if (user.status !== "active")
-    throw new ApiError(403, "Your account has been disabled.");
+
+  if (!(await user.comparePassword(password))) {
+    throw new ApiError(401, "Invalid login credentials.", {
+      password: "The password you entered is incorrect.",
+    });
+  }
+
+  if (user.status !== "active") {
+    throw new ApiError(403, "Your account has been disabled.", {
+      account: "This account has been disabled. Contact support.",
+    });
+  }
 
   const token = signToken({ id: user._id, role: user.role });
   return success(res, "Login successful", { token, user: user.toSafeObject() });
@@ -108,7 +130,7 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
   const otp = generateOTP();
   user.otp = otp;
   user.otpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
-  await user.save({validateBeforeSave: false});
+  await user.save({ validateBeforeSave: false });
 
   await sendOTPEmail(user.email, otp);
 
@@ -161,7 +183,7 @@ exports.resetPassword = asyncHandler(async (req, res) => {
   user.password = newPassword;
   user.resetToken = undefined;
   user.resetTokenExpiry = undefined;
-  await user.save({ validateBeforeSave: false});
+  await user.save({ validateBeforeSave: false });
 
   return success(res, "Password reset successful. Please login.");
 });
@@ -194,7 +216,7 @@ exports.changePassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Old password is incorrect.");
   }
   user.password = newPassword;
-  await user.save( { validateBeforeSave: false });
+  await user.save({ validateBeforeSave: false });
   return success(res, "Password changed successfully.");
 });
 

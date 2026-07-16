@@ -16,8 +16,9 @@ function endOfDay(date = new Date()) {
   return d;
 }
 
-// GET /dashboard/summary
-exports.summary = asyncHandler(async (req, res) => {
+// ---- internal data getters (reused by both the individual endpoints and the combined /dashboard endpoint) ----
+
+async function getSummary() {
   const today = { $gte: startOfDay(), $lte: endOfDay() };
 
   const [todaySalesAgg, todayOrders, totalProducts, totalCustomers, lowStock] =
@@ -34,23 +35,21 @@ exports.summary = asyncHandler(async (req, res) => {
       }),
     ]);
 
-  return success(res, "Dashboard Summary Cards", {
+  return {
     today_sales: todaySalesAgg[0]?.total || 0,
     today_orders: todayOrders,
     products: totalProducts,
     customers: totalCustomers,
     low_stock: lowStock,
-  });
-});
+  };
+}
 
-// GET /dashboard/sales-chart
-exports.salesChart = asyncHandler(async (req, res) => {
-  const days = Number(req.query.days || 7);
+async function getSalesChart(days = 7) {
   const from = new Date();
   from.setDate(from.getDate() - (days - 1));
   from.setHours(0, 0, 0, 0);
 
-  const rows = await Cart.aggregate([
+  return Cart.aggregate([
     { $match: { status: "completed", createdAt: { $gte: from } } },
     {
       $group: {
@@ -61,29 +60,20 @@ exports.salesChart = asyncHandler(async (req, res) => {
     },
     { $sort: { _id: 1 } },
   ]);
+}
 
-  return success(res, "Daily Sales Chart", { chart: rows });
-});
-
-// GET /dashboard/recent-orders
-exports.recentOrders = asyncHandler(async (req, res) => {
-  const limit = Number(req.query.limit || 10);
-  const orders = await Cart.find({ status: "completed" })
+async function getRecentOrders(limit = 10) {
+  return Cart.find({ status: "completed" })
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate("customer", "name mobile")
     .select(
       "invoiceNo grandTotal paymentMethod paymentStatus customer createdAt",
     );
+}
 
-  return success(res, "Recent Orders", { orders });
-});
-
-// GET /dashboard/top-products
-exports.topProducts = asyncHandler(async (req, res) => {
-  const limit = Number(req.query.limit || 5);
-
-  const rows = await Cart.aggregate([
+async function getTopProducts(limit = 5) {
+  return Cart.aggregate([
     { $match: { status: "completed" } },
     { $unwind: "$items" },
     {
@@ -97,30 +87,94 @@ exports.topProducts = asyncHandler(async (req, res) => {
     { $sort: { totalQty: -1 } },
     { $limit: limit },
   ]);
+}
 
-  return success(res, "Top Selling Products", { products: rows });
-});
-
-// GET /dashboard/low-stock
-exports.lowStock = asyncHandler(async (req, res) => {
-  const products = await Product.find({
+async function getLowStock() {
+  return Product.find({
     $expr: { $lte: ["$stockQty", "$lowStockThreshold"] },
     status: "active",
   })
     .populate("category", "name")
     .sort({ stockQty: 1 });
+}
 
+async function getNotifications(userId, limit = 10) {
+  return Notification.find({ $or: [{ forUser: null }, { forUser: userId }] })
+    .sort({ createdAt: -1 })
+    .limit(limit);
+}
+
+// ---- individual endpoints (kept for backward compatibility) ----
+
+// GET /dashboard/summary
+exports.summary = asyncHandler(async (req, res) => {
+  return success(res, "Dashboard Summary Cards", await getSummary());
+});
+
+// GET /dashboard/sales-chart
+exports.salesChart = asyncHandler(async (req, res) => {
+  const chart = await getSalesChart(Number(req.query.days || 7));
+  return success(res, "Daily Sales Chart", { chart });
+});
+
+// GET /dashboard/recent-orders
+exports.recentOrders = asyncHandler(async (req, res) => {
+  const orders = await getRecentOrders(Number(req.query.limit || 10));
+  return success(res, "Recent Orders", { orders });
+});
+
+// GET /dashboard/top-products
+exports.topProducts = asyncHandler(async (req, res) => {
+  const products = await getTopProducts(Number(req.query.limit || 5));
+  return success(res, "Top Selling Products", { products });
+});
+
+// GET /dashboard/low-stock
+exports.lowStock = asyncHandler(async (req, res) => {
+  const products = await getLowStock();
   return success(res, "Low Stock Products", { products });
 });
 
 // GET /dashboard/notifications
 exports.notifications = asyncHandler(async (req, res) => {
-  const limit = Number(req.query.limit || 10);
-  const notifications = await Notification.find({
-    $or: [{ forUser: null }, { forUser: req.user._id }],
-  })
-    .sort({ createdAt: -1 })
-    .limit(limit);
-
+  const notifications = await getNotifications(
+    req.user._id,
+    Number(req.query.limit || 10),
+  );
   return success(res, "Dashboard Notifications", { notifications });
+});
+
+// ---- combined endpoint: everything in one call, each as its own array/object ----
+
+// GET /dashboard
+exports.all = asyncHandler(async (req, res) => {
+  const days = Number(req.query.days || 7);
+  const ordersLimit = Number(req.query.ordersLimit || 10);
+  const productsLimit = Number(req.query.productsLimit || 5);
+  const notificationsLimit = Number(req.query.notificationsLimit || 10);
+
+  const [
+    summary,
+    salesChart,
+    recentOrders,
+    topProducts,
+    lowStock,
+    notifications,
+  ] = await Promise.all([
+    getSummary(),
+    getSalesChart(days),
+    getRecentOrders(ordersLimit),
+    getTopProducts(productsLimit),
+    getLowStock(),
+    getNotifications(req.user._id, notificationsLimit),
+  ]);
+
+  return success(res, "Dashboard data", {
+    summary,
+    salesChart,
+    recentOrders,
+    topProducts,
+    lowStock,
+    notifications,
+  });
 });
