@@ -7,17 +7,28 @@ const { nextStockRefNumber } = require("../utils/sequence");
 const { notifyLowStock } = require("../utils/notify");
 const { generatePdfReport, generateExcelReport } = require("../utils/exporter");
 
-// GET /stock/current
+// GET /stock/current  (also handles search - pass ?keyword= or ?search= to filter)
 exports.current = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
+  const { page = 1, limit = 20, keyword, search, category_id } = req.query;
+  const q = keyword || search; // accept either param name
+
+  const filter = {};
+  if (q) {
+    filter.$or = [
+      { name: { $regex: q, $options: "i" } },
+      { barcode: { $regex: q, $options: "i" } },
+    ];
+  }
+  if (category_id) filter.category = category_id;
+
   const [products, total] = await Promise.all([
-    Product.find()
+    Product.find(filter)
       .populate("category", "name")
       .select("name barcode stockQty lowStockThreshold unit category")
       .sort({ name: 1 })
       .skip((page - 1) * limit)
       .limit(Number(limit)),
-    Product.countDocuments(),
+    Product.countDocuments(filter),
   ]);
   return success(res, "Current stock list", {
     products,
@@ -27,7 +38,7 @@ exports.current = asyncHandler(async (req, res) => {
 
 // POST /stock/in
 exports.stockIn = asyncHandler(async (req, res) => {
-  const { product_id, qty, reason } = req.body;
+  const { product_id, qty, remarks, reason } = req.body; // remarks is optional; reason kept as alias
   if (!product_id || !qty || qty <= 0)
     throw new ApiError(422, "product_id and positive qty are required.");
 
@@ -46,7 +57,7 @@ exports.stockIn = asyncHandler(async (req, res) => {
     qty: Number(qty),
     previousStock,
     newStock: product.stockQty,
-    reason: reason || "Stock In",
+    reason: remarks || reason || "Stock In",
     createdBy: req.user._id,
   });
 
@@ -55,7 +66,7 @@ exports.stockIn = asyncHandler(async (req, res) => {
 
 // POST /stock/out
 exports.stockOut = asyncHandler(async (req, res) => {
-  const { product_id, qty, reason } = req.body;
+  const { product_id, qty, remarks, reason } = req.body; // remarks is optional; reason kept as alias
   if (!product_id || !qty || qty <= 0)
     throw new ApiError(422, "product_id and positive qty are required.");
 
@@ -76,7 +87,7 @@ exports.stockOut = asyncHandler(async (req, res) => {
     qty: Number(qty),
     previousStock,
     newStock: product.stockQty,
-    reason: reason || "Stock Out",
+    reason: remarks || reason || "Stock Out",
     createdBy: req.user._id,
   });
 
@@ -120,7 +131,7 @@ exports.byProduct = asyncHandler(async (req, res) => {
 
 // POST /stock/adjustment
 exports.adjustment = asyncHandler(async (req, res) => {
-  const { product_id, new_qty, reason } = req.body;
+  const { product_id, new_qty, remarks, reason } = req.body; // remarks is optional; reason kept as alias
   if (!product_id || new_qty === undefined)
     throw new ApiError(422, "product_id and new_qty are required.");
 
@@ -139,7 +150,7 @@ exports.adjustment = asyncHandler(async (req, res) => {
     qty: Number(new_qty) - previousStock,
     previousStock,
     newStock: product.stockQty,
-    reason: reason || "Manual stock adjustment",
+    reason: remarks || reason || "Manual stock adjustment",
     createdBy: req.user._id,
   });
 
@@ -148,17 +159,9 @@ exports.adjustment = asyncHandler(async (req, res) => {
   return success(res, "Manual stock adjustment", { history, product });
 });
 
-// GET /stock/search
-exports.search = asyncHandler(async (req, res) => {
-  const { keyword = "" } = req.query;
-  const products = await Product.find({
-    $or: [
-      { name: { $regex: keyword, $options: "i" } },
-      { barcode: { $regex: keyword, $options: "i" } },
-    ],
-  });
-  return success(res, "Search stock", { products });
-});
+// GET /stock/search - kept as an alias so old integrations don't break.
+// Merged into `current`: /stock/current?keyword=xyz does the same thing now.
+exports.search = exports.current;
 
 // GET /stock/category/:id
 exports.byCategory = asyncHandler(async (req, res) => {

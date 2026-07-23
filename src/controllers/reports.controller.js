@@ -55,7 +55,19 @@ exports.todaySales = asyncHandler(async (req, res) => {
 
 // GET /reports/daily
 exports.dailyReport = asyncHandler(async (req, res) => {
-  const filter = { status: "completed", ...dateRangeFilter(req) };
+  const { from, to } = req.query;
+  let filter = { status: "completed" };
+
+  if (from || to) {
+    filter = { ...filter, ...dateRangeFilter(req) };
+  } else {
+    // No date given - default to the last 30 days so the report doesn't have to scan all-time data.
+    const defaultFrom = new Date();
+    defaultFrom.setDate(defaultFrom.getDate() - 29);
+    defaultFrom.setHours(0, 0, 0, 0);
+    filter.createdAt = { $gte: defaultFrom };
+  }
+
   const rows = await Cart.aggregate([
     { $match: filter },
     {
@@ -72,7 +84,20 @@ exports.dailyReport = asyncHandler(async (req, res) => {
 
 // GET /reports/monthly
 exports.monthlyReport = asyncHandler(async (req, res) => {
-  const filter = { status: "completed", ...dateRangeFilter(req) };
+  const { from, to } = req.query;
+  let filter = { status: "completed" };
+
+  if (from || to) {
+    filter = { ...filter, ...dateRangeFilter(req) };
+  } else {
+    // No date given - default to the last 12 months.
+    const defaultFrom = new Date();
+    defaultFrom.setMonth(defaultFrom.getMonth() - 11);
+    defaultFrom.setDate(1);
+    defaultFrom.setHours(0, 0, 0, 0);
+    filter.createdAt = { $gte: defaultFrom };
+  }
+
   const rows = await Cart.aggregate([
     { $match: filter },
     {

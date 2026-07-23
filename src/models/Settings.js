@@ -93,10 +93,6 @@ const settingsSchema = new mongoose.Schema(
       },
     },
     about: {
-      appVersion: {
-        type: String,
-        default: "1.0.0",
-      },
       companyName: {
         type: String,
         default: "Saras POS",
