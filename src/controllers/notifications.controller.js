@@ -1,4 +1,5 @@
 const Notification = require("../models/Notification");
+const User = require("../models/User");
 const ApiError = require("../utils/ApiError");
 const asyncHandler = require("../utils/asyncHandler");
 const { success } = require("../utils/response");
@@ -13,12 +14,23 @@ exports.createTest = asyncHandler(async (req, res) => {
     title = "Test Notification",
     message = "This is a test notification.",
     type = "general",
+    ail, // optional: target a specific user by email instead of a global notification
   } = req.body;
+
+  let forUser = null;
+  if (email) {
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      throw new ApiError(404, `No account found with email ${email}.`);
+    }
+    forUser = user._id;
+  }
+
   const notification = await Notification.create({
     title,
     message,
     type,
-    forUser: null,
+    forUser,
   });
   return success(res, "Test notification created", { notification }, 201);
 });
