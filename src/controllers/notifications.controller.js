@@ -11,11 +11,11 @@ function scope(req) {
 // POST /notifications/test  (dev/testing convenience - not in the original API list)
 exports.createTest = asyncHandler(async (req, res) => {
   const {
-    title = "Test Notification",
-    message = "This is a test notification.",
-    type = "general",
-    ail, // optional: target a specific user by email instead of a global notification
-  } = req.body;
+  title = "Test Notification",
+  message = "This is a test notification.",
+  type = "general",
+  email, // optional: target a specific user by email instead of a global notification
+} = req.body;
 
   let forUser = null;
   if (email) {
