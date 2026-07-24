@@ -16,11 +16,14 @@ exports.register = asyncHandler(async (req, res) => {
     agreedToTerms,
     email,
     name,
+    phone,
+    gstNumber,
   } = req.body;
 
   const missing = [];
   if (!username) missing.push("username");
   if (!email) missing.push("email");
+  if (!phone) missing.push("phone");
   if (!password) missing.push("password");
   if (!businessName) missing.push("businessName");
   if (!country) missing.push("country");
@@ -36,6 +39,14 @@ exports.register = asyncHandler(async (req, res) => {
   if (agreedToTerms !== true) {
     throw new ApiError(422, "Validation Error", {
       agreedToTerms: "You must accept the Terms & Conditions to register.",
+    });
+  }
+
+   // gstNumber is optional, but if provided it must look like a valid GSTIN
+  const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/;
+  if (gstNumber && !GSTIN_REGEX.test(gstNumber.trim().toUpperCase())) {
+    throw new ApiError(422, "Validation Error", {
+      gstNumber: "Please enter a valid GST number.",
     });
   }
 
@@ -63,6 +74,8 @@ exports.register = asyncHandler(async (req, res) => {
     country,
     agreedToTerms,
     name: name || businessName,
+    phone,
+    gstNumber: gstNumber ? gstNumber.trim().toUpperCase() : "",
     role: "admin", // the person registering owns the business account
   });
 
@@ -218,6 +231,60 @@ exports.changePassword = asyncHandler(async (req, res) => {
   user.password = newPassword;
   await user.save({ validateBeforeSave: false });
   return success(res, "Password changed successfully.");
+});
+
+// GET /auth/terms-and-conditions
+exports.getTerms = asyncHandler(async (req, res) => {
+  // NOTE: placeholder/dummy content - replace with your real legal copy
+  const terms = {
+    version: "1.0",
+    effectiveDate: "2026-01-01",
+    title: "Terms & Conditions",
+    sections: [
+      {
+        heading: "1. Acceptance of Terms",
+        body:
+          "By registering for and using this service, you agree to be bound by these Terms & Conditions. If you do not agree, please do not use the service.",
+      },
+      {
+        heading: "2. Account Registration",
+        body:
+          "You must provide accurate, current, and complete information during registration, including your business name, contact details, and any tax identifiers such as GST number where applicable, and keep this information up to date.",
+      },
+      {
+        heading: "3. Use of Service",
+        body:
+          "You agree to use the service only for lawful purposes and in accordance with all applicable local, state, and national laws and regulations.",
+      },
+      {
+        heading: "4. Privacy",
+        body:
+          "Your use of the service is also governed by our Privacy Policy, which describes how we collect, use, and protect your information.",
+      },
+      {
+        heading: "5. Termination",
+        body:
+          "We reserve the right to suspend or terminate your account if you violate these Terms & Conditions or engage in fraudulent or abusive activity.",
+      },
+      {
+        heading: "6. Changes to Terms",
+        body:
+          "We may update these Terms & Conditions from time to time. Continued use of the service after changes are posted constitutes acceptance of the revised terms.",
+      },
+      {
+        heading: "7. Limitation of Liability",
+        body:
+          "The service is provided \"as is\" without warranties of any kind. We are not liable for any indirect, incidental, or consequential damages arising from your use of the service.",
+      },
+      {
+        heading: "8. Contact",
+        body:
+          "For questions about these Terms & Conditions, please contact our support team.",
+      },
+    ],
+  };
+
+  return success(res, "Terms & conditions fetched", { terms });
 });
 
 // POST /auth/logout

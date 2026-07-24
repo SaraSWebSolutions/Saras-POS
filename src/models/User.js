@@ -29,6 +29,7 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
+      required: true,
       trim: true,
     },
     avatar: {
@@ -56,6 +57,12 @@ const userSchema = new mongoose.Schema(
       type: String, 
       required: true, 
       trim: true 
+    },
+    gstNumber: {
+      type: String,
+      trim: true,
+      default: "",
+      // optional - not all businesses are GST registered
     },
     agreedToTerms: { 
       type: Boolean, 
