@@ -208,11 +208,23 @@ exports.getProfile = asyncHandler(async (req, res) => {
 
 // PUT /auth/update-profile
 exports.updateProfile = asyncHandler(async (req, res) => {
-  const { name, phone, avatar } = req.body;
+  const { name, phone, avatar, gstNumber } = req.body;
+
+  const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/;
+  if (gstNumber && !GSTIN_REGEX.test(gstNumber.trim().toUpperCase())) {
+    throw new ApiError(422, "Validation Error", {
+      gstNumber: "Please enter a valid GST number.",
+    });
+  }
+
   const user = await User.findById(req.user._id);
   if (name) user.name = name;
   if (phone) user.phone = phone;
   if (avatar) user.avatar = avatar;
+  if (gstNumber !== undefined) {
+    user.gstNumber = gstNumber ? gstNumber.trim().toUpperCase() : "";
+  }
+  
   await user.save({ validateBeforeSave: false });
   return success(res, "Profile updated", { user: user.toSafeObject() });
 });

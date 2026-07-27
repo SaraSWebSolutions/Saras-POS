@@ -38,7 +38,7 @@ exports.current = asyncHandler(async (req, res) => {
 
 // POST /stock/in
 exports.stockIn = asyncHandler(async (req, res) => {
-  const { product_id, qty, remarks, reason } = req.body; // remarks is optional; reason kept as alias
+  const { product_id, qty, purchasePrice, supplier, remarks } = req.body;
   if (!product_id || !qty || qty <= 0)
     throw new ApiError(422, "product_id and positive qty are required.");
 
@@ -57,7 +57,10 @@ exports.stockIn = asyncHandler(async (req, res) => {
     qty: Number(qty),
     previousStock,
     newStock: product.stockQty,
-    reason: remarks || reason || "Stock In",
+    reason: "Stock In",
+    remarks: remarks || "",
+    purchasePrice: purchasePrice !== undefined && purchasePrice !== "" ? Number(purchasePrice) : null,
+    supplier: supplier || "",
     createdBy: req.user._id,
   });
 
@@ -87,7 +90,8 @@ exports.stockOut = asyncHandler(async (req, res) => {
     qty: Number(qty),
     previousStock,
     newStock: product.stockQty,
-    reason: remarks || reason || "Stock Out",
+    reason: reason || "Stock Out",
+    remarks: remarks || "",
     createdBy: req.user._id,
   });
 

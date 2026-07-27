@@ -32,6 +32,18 @@ const stockHistorySchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+     remarks: {
+      type: String,
+      default: "",
+    },
+    purchasePrice: {
+      type: Number,
+      default: null,
+    },
+    supplier: {
+      type: String,
+      default: "",
+    },
     reference: {
       type: String,
       default: "",
