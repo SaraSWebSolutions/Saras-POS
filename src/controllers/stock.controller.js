@@ -38,12 +38,21 @@ exports.current = asyncHandler(async (req, res) => {
 
 // POST /stock/in
 exports.stockIn = asyncHandler(async (req, res) => {
-  const { product_id, qty, purchasePrice, supplier, remarks } = req.body;
+  const { product_id, current_stock, qty, purchasePrice, supplier, remarks } = req.body;
   if (!product_id || !qty || qty <= 0)
     throw new ApiError(422, "product_id and positive qty are required.");
 
   const product = await Product.findById(product_id);
   if (!product) throw new ApiError(404, "Product not found.");
+
+  // Soft check: if the client's displayed "Current Stock" no longer matches
+  // the DB, someone else changed it since the form was opened. We don't
+  // block the save — we just flag it so the frontend can notify the user.
+  const expectedStock =
+    current_stock !== undefined && current_stock !== null && current_stock !== ""
+      ? Number(current_stock)
+      : null;
+  const stockChanged = expectedStock !== null && expectedStock !== product.stockQty;
 
   const previousStock = product.stockQty;
   product.stockQty += Number(qty);
@@ -64,17 +73,31 @@ exports.stockIn = asyncHandler(async (req, res) => {
     createdBy: req.user._id,
   });
 
-  return success(res, "Stock In", { history, product }, 201);
+  return success(res, "Stock In", { history,
+    product,
+    stockChanged,
+    expectedStock,
+    actualStock: previousStock, }, 201);
 });
 
 // POST /stock/out
 exports.stockOut = asyncHandler(async (req, res) => {
-  const { product_id, qty, remarks, reason } = req.body; // remarks is optional; reason kept as alias
+  const { product_id, current_stock, qty, purchasePrice, remarks, reason } = req.body; // remarks is optional; reason kept as alias
   if (!product_id || !qty || qty <= 0)
     throw new ApiError(422, "product_id and positive qty are required.");
 
   const product = await Product.findById(product_id);
   if (!product) throw new ApiError(404, "Product not found.");
+
+  // Soft check: if the client's displayed "Current Stock" no longer matches
+  // the DB, someone else changed it since the form was opened. We don't
+  // block the save — we just flag it so the frontend can notify the user.
+  const expectedStock =
+    current_stock !== undefined && current_stock !== null && current_stock !== ""
+      ? Number(current_stock)
+      : null;
+  const stockChanged = expectedStock !== null && expectedStock !== product.stockQty;
+
   if (product.stockQty < qty)
     throw new ApiError(422, "Insufficient stock available.");
 
@@ -92,12 +115,17 @@ exports.stockOut = asyncHandler(async (req, res) => {
     newStock: product.stockQty,
     reason: reason || "Stock Out",
     remarks: remarks || "",
+    purchasePrice: purchasePrice !== undefined && purchasePrice !== "" ? Number(purchasePrice) : null,
     createdBy: req.user._id,
   });
 
   await notifyLowStock(product);
 
-  return success(res, "Stock Out", { history, product }, 201);
+  return success(res, "Stock Out", { history,
+    product,
+    stockChanged,
+    expectedStock,
+    actualStock: previousStock, }, 201);
 });
 
 // GET /stock/history

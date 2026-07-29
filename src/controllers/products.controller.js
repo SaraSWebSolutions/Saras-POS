@@ -12,6 +12,14 @@ function fileUrl(req, filename) {
   return `${process.env.BASE_URL || `${req.protocol}://${req.get("host")}`}/uploads/${filename}`;
 }
 
+// Generates a unique numeric barcode value (EAN-13 style, 13 digits).
+// Shared by product creation (auto-generate) and the explicit
+// /products/barcode/generate endpoint, so both stay consistent.
+function generateBarcodeValue() {
+  const base = Date.now().toString().slice(-12);
+  return base.padStart(13, "0");
+}
+
 // GET /products
 exports.list = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, search = "", category_id } = req.query;
@@ -58,12 +66,7 @@ exports.create = asyncHandler(async (req, res) => {
     image,
   } = req.body;
 
-  if (
-    !product_name ||
-    !category_id ||
-    !barcode ||
-    selling_price === undefined
-  ) {
+  if (!product_name || !category_id || selling_price === undefined) {
     throw new ApiError(
       422,
       "product_name, category_id, barcode and selling_price are required.",
@@ -72,10 +75,19 @@ exports.create = asyncHandler(async (req, res) => {
   const category = await Category.findById(category_id);
   if (!category) throw new ApiError(422, "Invalid category_id.");
 
+    // barcode is optional: if the client doesn't send one (e.g. new product,
+  // no barcode scanned/typed yet), auto-generate one so create never blocks.
+  let finalBarcode = barcode;
+  if (!finalBarcode) {
+    do {
+      finalBarcode = generateBarcodeValue();
+    } while (await Product.exists({ barcode: finalBarcode }));
+  }
+
   const product = await Product.create({
     name: product_name,
     category: category_id,
-    barcode,
+    barcode: finalBarcode,
     sellingPrice: selling_price,
     purchasePrice: purchase_price || 0,
     stockQty: stock_qty || 0,
@@ -280,9 +292,7 @@ exports.setStatus = asyncHandler(async (req, res) => {
 exports.generateBarcode = asyncHandler(async (req, res) => {
   const { product_name, product_id } = req.body;
 
-  // Generates a unique numeric barcode value (EAN-13 style, 13 digits)
-  const base = Date.now().toString().slice(-12);
-  const barcodeValue = base.padStart(13, "0");
+  const barcodeValue = generateBarcodeValue();
 
   if (product_id) {
     const product = await Product.findByIdAndUpdate(

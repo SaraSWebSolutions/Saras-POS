@@ -101,7 +101,57 @@ exports.billingProductByBarcode = asyncHandler(async (req, res) => {
 
 // POST /billing/cart
 exports.createCart = asyncHandler(async (req, res) => {
+  const {items} =req.body;
   const cart = await Cart.create({ items: [], createdBy: req.user._id });
+
+  if (Array.isArray(items) && items.length > 0) {
+    const settings = await Settings.findOne();
+
+    for (const raw of items) {
+      const { product_id, barcode, qty = 1 } = raw || {};
+      if (!product_id && !barcode) {
+        throw new ApiError(
+          422,
+          "Each item requires product_id or barcode.",
+        );
+      }
+      if (!qty || qty <= 0) {
+        throw new ApiError(422, "Each item requires a positive qty.");
+      }
+
+      const product = product_id
+        ? await Product.findById(product_id)
+        : await Product.findOne({ barcode });
+      if (!product) {
+        throw new ApiError(
+          404,
+          `Product not found for ${product_id ? "id " + product_id : "barcode " + barcode}.`,
+        );
+      }
+
+      if (!settings?.billing?.allowNegativeStock && product.stockQty < qty) {
+        throw new ApiError(422, `Insufficient stock for ${product.name}.`);
+      }
+
+      const existing = cart.items.find(
+        (i) => i.product.toString() === product._id.toString(),
+      );
+      if (existing) {
+        existing.qty += Number(qty);
+      } else {
+        cart.items.push({
+          product: product._id,
+          name: product.name,
+          price: product.sellingPrice,
+          qty: Number(qty),
+          gstRate: product.gstRate,
+        });
+      }
+    }
+
+    await recalculateCart(cart);
+  }
+
   return success(res, "Create new cart/session", { cart }, 201);
 });
 

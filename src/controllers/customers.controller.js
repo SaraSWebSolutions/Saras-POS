@@ -88,7 +88,7 @@ exports.purchaseHistory = asyncHandler(async (req, res) => {
   })
     .sort({ createdAt: -1 })
     .select("invoiceNo grandTotal paymentMethod createdAt");
-  return success(res, "Customer purchase history", { history });
+  return success(res, "Customer purchase history", { history, orderCount: history.length });
 });
 
 // GET /customers/:id/total-purchase
