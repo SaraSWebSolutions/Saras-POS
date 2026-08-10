@@ -21,7 +21,6 @@ exports.register = asyncHandler(async (req, res) => {
   } = req.body;
 
   const missing = [];
-  if (!username) missing.push("username");
   if (!email) missing.push("email");
   if (!phone) missing.push("phone");
   if (!password) missing.push("password");
@@ -50,13 +49,15 @@ exports.register = asyncHandler(async (req, res) => {
     });
   }
 
-  const existingUsername = await User.findOne({
-    username: username.toLowerCase(),
-  });
-  if (existingUsername) {
-    throw new ApiError(422, "Validation Error", {
-      username: "This username is already taken.",
+  if (username) {
+    const existingUsername = await User.findOne({
+      username: username.toLowerCase(),
     });
+    if (existingUsername) {
+      throw new ApiError(422, "Validation Error", {
+        username: "This username is already taken.",
+      });
+    }
   }
 
   const existingEmail = await User.findOne({ email: email.toLowerCase() });
@@ -67,7 +68,7 @@ exports.register = asyncHandler(async (req, res) => {
   }
 
   const user = await User.create({
-    username: username.toLowerCase(),
+    username: username ? username.toLowerCase() : undefined,
     email: email.toLowerCase(),
     password,
     businessName,

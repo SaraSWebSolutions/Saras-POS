@@ -582,7 +582,19 @@ exports.generateInvoice = asyncHandler(async (req, res) => {
     "name mobile",
   );
   await notifyNewOrder(populated);
-  return success(res, "Generate invoice", { invoice: populated }, 201);
+  const settings = await Settings.findOne();
+  const invoiceUrl = await buildInvoicePdf(
+    req,
+    populated,
+    settings?.shopProfile,
+  );
+
+  return success(
+    res,
+    "Generate invoice",
+    { invoice: populated, invoiceUrl },
+    201,
+  );
 });
 
 // GET /billing/invoice/:invoiceNo

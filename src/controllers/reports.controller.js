@@ -172,22 +172,26 @@ exports.customerWise = asyncHandler(async (req, res) => {
 // GET /reports/gst
 exports.gstReport = asyncHandler(async (req, res) => {
   const filter = { status: "completed", ...dateRangeFilter(req) };
-  const agg = await Cart.aggregate([
-    { $match: filter },
-    {
-      $group: {
-        _id: null,
-        totalGst: { $sum: "$gstAmount" },
-        totalSales: { $sum: "$grandTotal" },
-      },
-    },
-  ]);
-  return success(res, "GST summary report", {
-    totalGst: agg[0]?.totalGst || 0,
-    totalSales: agg[0]?.totalSales || 0,
-  });
-});
+  const carts = await Cart.find(filter).sort({ createdAt: 1 }).lean();
 
+  const report = carts.map((c) => {
+    const taxable = c.subtotal || 0;
+    const gstAmount = c.gstAmount || 0;
+    const total = c.grandTotal || 0;
+    const rate = taxable > 0 ? Math.round((gstAmount / taxable) * 100) : 0;
+    return {
+      id: String(c._id),
+      invoice: c.invoiceNo || "",
+      taxable,
+      gst: `${rate}%`,
+      gstAmount,
+      total,
+    };
+  });
+
+  return success(res, "GST summary report", { report });
+});
+   
 // GET /reports/payment
 exports.paymentReport = asyncHandler(async (req, res) => {
   const filter = { status: "completed", ...dateRangeFilter(req) };
